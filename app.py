@@ -461,32 +461,47 @@ def extract_text_from_pdf(input_pdf):
                         texto_completo += "\n" + next_text
                         print(f"[EXTRAÇÃO] Incluindo continuação da página {proxima_pagina + 1}")
 
+            # Processamento de Itens - Abordagem híbrida melhorada
             linhas = texto_completo.strip().split('\n')
-            
             itens = []
             item_atual = []
             
-            for linha in linhas[1:]:
+            print(f"[EXTRAÇÃO] Processando {len(linhas)} linhas para extrair itens...")
+            print(f"[EXTRAÇÃO] DEBUG - Primeiras 10 linhas do texto:")
+            for i, linha in enumerate(linhas[:10]):
+                print(f"[EXTRAÇÃO] Linha {i}: '{linha.strip()}'")
+            
+            for i, linha in enumerate(linhas[1:]):  # Pular primeira linha (cabeçalho)
                 linha_limpa = linha.strip()
-                if linha_limpa in ["CONTEÚDO", "ATRIBUTOS", "QUANT.", "DESCRIÇÃO", "CÓDIGO"]:
+                
+                # Pular linhas vazias ou cabeçalhos conhecidos
+                if not linha_limpa or linha_limpa in ["CONTEÚDO", "ATRIBUTOS", "QUANT.", "DESCRIÇÃO", "CÓDIGO"]:
                     continue
-                    
-                if linha_limpa == "1" or (linha_limpa.isdigit() and len(linha_limpa) <= 2):
-                    if item_atual and len(item_atual) >= 2:  # Validar que tem pelo menos código e descrição
+                
+                # Detectar início de novo item (número sequencial pequeno)
+                if linha_limpa.isdigit() and len(linha_limpa) <= 2 and int(linha_limpa) <= 50:
+                    # Salvar item anterior se existir
+                    if item_atual and len(item_atual) >= 2:
                         codigo = item_atual[0]
                         conteudo = " ".join(item_atual[1:])
-                        if codigo and conteudo:  # Validar que não estão vazios
+                        if codigo and conteudo and len(codigo) > 3:  # Validar código mínimo
                             itens.append([codigo, conteudo, linha_limpa])
-                        item_atual = []
+                            print(f"[EXTRAÇÃO] Item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...', Qtd='{linha_limpa}'")
+                    item_atual = []
                 elif linha_limpa:
+                    # Adicionar linha ao item atual
                     item_atual.append(linha_limpa)
+                    print(f"[EXTRAÇÃO] Linha adicionada ao item: '{linha_limpa[:50]}...'")
             
             # Processar último item se existir
             if item_atual and len(item_atual) >= 2:
                 codigo = item_atual[0]
                 conteudo = " ".join(item_atual[1:])
-                if codigo and conteudo:
+                if codigo and conteudo and len(codigo) > 3:
                     itens.append([codigo, conteudo, "1"])
+                    print(f"[EXTRAÇÃO] Último item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...'")
+            
+            print(f"[EXTRAÇÃO] Total de itens extraídos: {len(itens)}")
 
             # Validar se extraiu dados válidos
             if itens:
@@ -574,9 +589,11 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
                     
                     # Validar que os dados não estão vazios
                     if codigo and conteudo:
+                        # Incluir código junto com a descrição
+                        produto_completo = f"Código: {codigo}\n{conteudo}"
                         # Quebrar conteúdo em linhas para melhor formatação
-                        conteudo_quebrado = "\n".join(conteudo[j:j+82] for j in range(0, len(conteudo), 50))
-                        table_data.append([conteudo_quebrado, quantidade])
+                        produto_quebrado = "\n".join(produto_completo[j:j+82] for j in range(0, len(produto_completo), 50))
+                        table_data.append([produto_quebrado, quantidade])
                         itens_validos += 1
                     else:
                         print(f"[GERAÇÃO] Item inválido ignorado na DANFE {i+1}: código='{codigo}', conteúdo='{conteudo}'")
