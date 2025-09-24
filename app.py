@@ -589,12 +589,47 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
                     
                     # Validar que os dados não estão vazios
                     if codigo and conteudo:
+                        # Limpar e normalizar a descrição
+                        conteudo_limpo = re.sub(r'\s+', ' ', conteudo.strip())  # Remove espaços extras
+                        conteudo_limpo = re.sub(r'[■□▪▫]', '', conteudo_limpo)  # Remove caracteres especiais
+                        
                         # Incluir código junto com a descrição
-                        produto_completo = f"Código: {codigo}\n{conteudo}"
+                        produto_completo = f"Código: {codigo}\n{conteudo_limpo}"
+                        
+                        # Função para quebrar texto sem cortar palavras
+                        def quebrar_texto_inteligente(texto, largura_maxima=50):
+                            linhas = []
+                            palavras = texto.split()
+                            linha_atual = ""
+                            
+                            for palavra in palavras:
+                                # Se adicionar a palavra não ultrapassar o limite
+                                if len(linha_atual + " " + palavra) <= largura_maxima:
+                                    if linha_atual:
+                                        linha_atual += " " + palavra
+                                    else:
+                                        linha_atual = palavra
+                                else:
+                                    # Se a linha atual não está vazia, adiciona às linhas
+                                    if linha_atual:
+                                        linhas.append(linha_atual)
+                                        linha_atual = palavra
+                                    else:
+                                        # Palavra muito longa, força quebra
+                                        linhas.append(palavra[:largura_maxima])
+                                        linha_atual = palavra[largura_maxima:]
+                            
+                            # Adiciona a última linha se não estiver vazia
+                            if linha_atual:
+                                linhas.append(linha_atual)
+                            
+                            return "\n".join(linhas)
+                        
                         # Quebrar conteúdo em linhas para melhor formatação
-                        produto_quebrado = "\n".join(produto_completo[j:j+82] for j in range(0, len(produto_completo), 50))
+                        produto_quebrado = quebrar_texto_inteligente(produto_completo, 50)
                         table_data.append([produto_quebrado, quantidade])
                         itens_validos += 1
+                        print(f"[GERAÇÃO] Item formatado: {len(produto_quebrado.split())} linhas")
                     else:
                         print(f"[GERAÇÃO] Item inválido ignorado na DANFE {i+1}: código='{codigo}', conteúdo='{conteudo}'")
                 else:
