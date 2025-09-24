@@ -471,6 +471,8 @@ def extract_text_from_pdf(input_pdf):
             for i, linha in enumerate(linhas[:10]):
                 print(f"[EXTRAÇÃO] Linha {i}: '{linha.strip()}'")
             
+            quantidade_atual = "1"  # Quantidade padrão
+            
             for i, linha in enumerate(linhas[1:]):  # Pular primeira linha (cabeçalho)
                 linha_limpa = linha.strip()
                 
@@ -478,17 +480,47 @@ def extract_text_from_pdf(input_pdf):
                 if not linha_limpa or linha_limpa in ["CONTEÚDO", "ATRIBUTOS", "QUANT.", "DESCRIÇÃO", "CÓDIGO"]:
                     continue
                 
-                # Detectar início de novo item (número sequencial pequeno)
-                if linha_limpa.isdigit() and len(linha_limpa) <= 2 and int(linha_limpa) <= 50:
+                # Detectar quantidade após QUANT.
+                if i > 0 and "QUANT." in linhas[i].upper():
+                    # Procurar quantidade na próxima linha ou na mesma linha
+                    linha_quant = linha_limpa
+                    if linha_quant.isdigit():
+                        quantidade_atual = linha_quant
+                        print(f"[EXTRAÇÃO] Quantidade encontrada: '{quantidade_atual}'")
+                        continue
+                    # Se não encontrou na linha atual, procurar na próxima
+                    elif i + 1 < len(linhas):
+                        proxima_linha = linhas[i + 1].strip()
+                        if proxima_linha.isdigit():
+                            quantidade_atual = proxima_linha
+                            print(f"[EXTRAÇÃO] Quantidade encontrada na próxima linha: '{quantidade_atual}'")
+                
+                # Detectar início de novo item - deve ser um código que começa com letra/número longo
+                # ou um número sequencial pequeno APENAS se não temos item atual
+                is_new_item = False
+                
+                # Se não temos item atual e é um número pequeno, pode ser início de item
+                if not item_atual and linha_limpa.isdigit() and len(linha_limpa) <= 2 and int(linha_limpa) <= 50:
+                    is_new_item = True
+                    print(f"[EXTRAÇÃO] Detectado início de novo item (número sequencial): '{linha_limpa}'")
+                
+                # Se parece com um código (letras + números, mais de 5 caracteres)
+                elif re.match(r'^[A-Za-z0-9]{5,}', linha_limpa) and not item_atual:
+                    is_new_item = True
+                    print(f"[EXTRAÇÃO] Detectado início de novo item (código): '{linha_limpa}'")
+                
+                if is_new_item:
                     # Salvar item anterior se existir
                     if item_atual and len(item_atual) >= 2:
                         codigo = item_atual[0]
                         conteudo = " ".join(item_atual[1:])
                         if codigo and conteudo and len(codigo) > 3:  # Validar código mínimo
-                            itens.append([codigo, conteudo, linha_limpa])
-                            print(f"[EXTRAÇÃO] Item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...', Qtd='{linha_limpa}'")
+                            itens.append([codigo, conteudo, quantidade_atual])
+                            print(f"[EXTRAÇÃO] Item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...', Qtd='{quantidade_atual}'")
                     item_atual = []
-                elif linha_limpa:
+                    quantidade_atual = "1"  # Reset quantidade para próximo item
+                
+                if linha_limpa:
                     # Adicionar linha ao item atual
                     item_atual.append(linha_limpa)
                     print(f"[EXTRAÇÃO] Linha adicionada ao item: '{linha_limpa[:50]}...'")
@@ -498,8 +530,8 @@ def extract_text_from_pdf(input_pdf):
                 codigo = item_atual[0]
                 conteudo = " ".join(item_atual[1:])
                 if codigo and conteudo and len(codigo) > 3:
-                    itens.append([codigo, conteudo, "1"])
-                    print(f"[EXTRAÇÃO] Último item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...'")
+                    itens.append([codigo, conteudo, quantidade_atual])
+                    print(f"[EXTRAÇÃO] Último item adicionado: Código='{codigo}', Desc='{conteudo[:30]}...', Qtd='{quantidade_atual}'")
             
             print(f"[EXTRAÇÃO] Total de itens extraídos: {len(itens)}")
 
@@ -589,9 +621,37 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
                     
                     # Validar que os dados não estão vazios
                     if codigo and conteudo:
+                        # Função para corrigir palavras cortadas
+                        def corrigir_palavras_cortadas(texto):
+                            # Dicionário de correções comuns
+                            correcoes = {
+                                r'\bU\s+nissex\b': 'Unissex',
+                                r'\bSkat\s+ista\b': 'Skatista', 
+                                r'\bMa\s+sculino\b': 'Masculino',
+                                r'\bFe\s+minino\b': 'Feminino',
+                                r'\bPre\s+mium\b': 'Premium',
+                                r'\bCas\s+ual\b': 'Casual',
+                                r'\bCam\s+pus\b': 'Campus',
+                                r'\bTê\s+nis\b': 'Tênis',
+                                r'\bSka\s+te\b': 'Skate',
+                                r'\bCon\s+fortável\b': 'Confortável',
+                                r'\bLan\s+çamento\b': 'Lançamento',
+                                r'\bDia\s+a\s+Dia\b': 'Dia a Dia',
+                                r'\bSu\s+per\b': 'Super',
+                                r'\bLi\s+nha\b': 'Linha',
+                                r'\bMo\s+retto\b': 'Moretto'
+                            }
+                            
+                            texto_corrigido = texto
+                            for padrao, correcao in correcoes.items():
+                                texto_corrigido = re.sub(padrao, correcao, texto_corrigido, flags=re.IGNORECASE)
+                            
+                            return texto_corrigido
+                        
                         # Limpar e normalizar a descrição
                         conteudo_limpo = re.sub(r'\s+', ' ', conteudo.strip())  # Remove espaços extras
                         conteudo_limpo = re.sub(r'[■□▪▫]', '', conteudo_limpo)  # Remove caracteres especiais
+                        conteudo_limpo = corrigir_palavras_cortadas(conteudo_limpo)  # Corrige palavras cortadas
                         
                         # Incluir código junto com a descrição
                         produto_completo = f"Código: {codigo}\n{conteudo_limpo}"
