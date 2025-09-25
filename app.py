@@ -657,7 +657,7 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
                         produto_completo = f"Código: {codigo}\n{conteudo_limpo}"
                         
                         # Função para quebrar texto sem cortar palavras
-                        def quebrar_texto_inteligente(texto, largura_maxima=50):
+                        def quebrar_texto_inteligente(texto, largura_maxima=112):  # Alterado para 112 caracteres
                             linhas = []
                             palavras = texto.split()
                             linha_atual = ""
@@ -679,14 +679,14 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
                                         linhas.append(palavra[:largura_maxima])
                                         linha_atual = palavra[largura_maxima:]
                             
-                            # Adiciona a última linha se não estiver vazia
+                            # Adiciona a última linha se não estiver vazia (FORA do loop)
                             if linha_atual:
                                 linhas.append(linha_atual)
                             
                             return "\n".join(linhas)
                         
                         # Quebrar conteúdo em linhas para melhor formatação
-                        produto_quebrado = quebrar_texto_inteligente(produto_completo, 50)
+                        produto_quebrado = quebrar_texto_inteligente(produto_completo, 112)  # Usar largura de 112
                         table_data.append([produto_quebrado, quantidade])
                         itens_validos += 1
                         print(f"[GERAÇÃO] Item formatado: {len(produto_quebrado.split())} linhas")
@@ -703,22 +703,25 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
 
             # Criar tabela
             table_width = width * 0.98
-            col_widths = [table_width * 0.95, table_width * 0.05]
+            col_widths = [table_width * 0.85, table_width * 0.15]  # Melhor distribuição: 85% descrição, 15% quantidade
             table = Table(table_data, colWidths=col_widths)
 
             style = TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), colors.white),
                 ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),  # Centralizar quantidade
                 ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 18),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('FONTSIZE', (0, 0), (-1, -1), 12),  # Fonte 12pt para máximo aproveitamento
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),  # Padding mínimo inferior (2pt)
+                ('TOPPADDING', (0, 0), (-1, -1), 2),    # Padding mínimo superior (2pt)
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),   # Padding mínimo esquerdo (3pt)
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),  # Padding mínimo direito (3pt)
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('NOSPLIT', (0, 0), (-1, -1)),
                 ('WORDWRAP', (0, 0), (-1, -1)),
                 ('ROWHEIGHT', (0, 0), (-1, -1), 100),
-                ('LEADING', (0, 0), (-1, -1), 20)
+                ('LEADING', (0, 0), (-1, -1), 14)  # Espaçamento mínimo entre linhas (14pt)
             ])
             table.setStyle(style)
 
@@ -781,6 +784,19 @@ def create_individual_page_pdf(output_pdf, data, input_pdf):
             except Exception as e:
                 print(f"[GERAÇÃO] ERRO ao posicionar tabela para DANFE {i+1}: {str(e)}")
                 continue
+
+            # Adicionar contador de páginas (P1, P2, P3, etc.)
+            try:
+                contador_texto = f"P{paginas_geradas + 1}"
+                c.setFont("Helvetica-Bold", 14)
+                c.setFillColor(colors.black)
+                # Posicionar no final da página, canto inferior direito
+                contador_x = width - 2 * cm
+                contador_y = 0.3 * cm  # Bem próximo à borda inferior
+                c.drawString(contador_x, contador_y, contador_texto)
+                print(f"[GERAÇÃO] Contador de página adicionado: {contador_texto}")
+            except Exception as e:
+                print(f"[GERAÇÃO] ERRO ao adicionar contador de página para DANFE {i+1}: {str(e)}")
 
             c.showPage()
             paginas_geradas += 1
